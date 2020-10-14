@@ -1,0 +1,114 @@
+---
+title: "CourseProject1-ReproducibleResearch"
+author: "pblack476"
+date: "10/14/2020"
+output: html_document
+---
+```{r}
+require(knitr)
+require(ggplot2)
+require(data.table)
+require(lubridate)
+require(mice)
+opts_chunk$set(echo = TRUE, results = 'hold')
+```
+
+Reading the data:
+```{r}
+act_data <- fread("activity.csv", header=TRUE, sep=",")
+str(act_data)
+```
+
+Pre-Processing:
+```{r}
+act_data[,date := ymd(act_data[,date])]
+act_data[,interval := as.factor(act_data[,interval])]
+str(act_data)
+```
+
+## What is mean total number of steps taken per day?
+### 1. Calculate the total number of steps taken per day and plot a histogram
+
+```{r}
+spd <- aggregate(steps ~ date,act_data,sum)
+colnames(spd) <- c("date", "steps")
+head(spd)
+ggplot(spd, aes(x = steps)) + 
+  geom_histogram(fill = "red", binwidth = 1000) + 
+  labs(title = "Histogram - Steps Taken Per Day", x = "Steps Per Day", y = "Frequency")
+```
+
+### 2. Report the mean and median of total number of steps per day
+
+```{r}
+mean_steps_per_day <- mean(spd$steps)
+mean_steps_per_day
+median_steps_per_day <- median(spd$steps)
+median_steps_per_day
+```
+
+## What is the average daily activity pattern?
+### 1. Make a time series plot of the 5-minute interval and the average number of steps taken, averaged across all days
+
+```{r}
+steps_per_interval <- aggregate(steps ~ interval, data = act_data, FUN = mean, na.rm = TRUE)
+steps_per_interval$interval <- as.integer(levels(steps_per_interval$interval)[steps_per_interval$interval])
+colnames(steps_per_interval) <- c("interval", "steps")
+
+ggplot(steps_per_interval, aes(x = interval, y = steps)) + 
+  geom_line(col = "red", size = 1) + 
+  labs(title = "Average Daily Activity Pattern", x = "Interval", y = "Steps")
+```
+
+### 2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+
+```{r}
+max_interval <- steps_per_interval[which.max(steps_per_interval$steps),]
+max_interval
+```
+
+### Imputation of NA's
+
+```{r}
+new_act_data <- act_data
+new_act_data<-complete(mice(new_act_data,m=1,method='mean'))
+```
+
+### 4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day.
+
+```{r}
+new_steps_per_day <- aggregate(steps ~ date, data = new_act_data, FUN=sum)
+colnames(new_steps_per_day) <- c("date", "steps")
+ggplot(new_steps_per_day, aes(x = steps)) + 
+  geom_histogram(fill = "red", binwidth = 1000) + 
+  labs(title = "Histogram - Steps Taken Per Day", x = "Steps Per Day", y = "Frequency")
+```
+
+### Impact of Imputation:
+```{r}
+new_mean_steps_per_day <- mean(new_steps_per_day$steps)
+new_mean_steps_per_day
+new_median_steps_per_day <- median(new_steps_per_day$steps)
+new_median_steps_per_day
+```
+
+## Are there differences in activity patterns between weekdays and weekends?
+### 1. Create a new factor variable in the dataset with two levels - “weekday” and “weekend” indicating whether a given date is a weekday or weekend day.
+
+```{r}
+dt <- data.table(new_act_data)
+dt[, weekday := ifelse(weekdays(date) %in% c("Saturday", "Sunday"), "Weekend", "Weekday")]
+dt$weekday <- as.factor(dt$weekday)
+dt$interval <- as.integer(levels(dt$interval)[dt$interval])
+```
+
+### 2. Make a panel plot containing a time series plot (i.e. type = “l”) of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis)
+
+```{r}
+steps_per_weekday <- aggregate(steps ~ interval+weekday, data = dt, FUN = mean)
+ggplot(steps_per_weekday, aes(x = interval, y = steps)) + 
+  geom_line(col = "red", size = 1) + 
+  facet_wrap(~ weekday, nrow=2, ncol=1) + 
+  labs(x = "Interval", y = "Number of Steps")
+```
+
